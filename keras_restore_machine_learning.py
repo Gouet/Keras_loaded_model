@@ -9,7 +9,7 @@ import cv2
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-input_image = np.vectorize(lambda x: 255 - x)(np.ndarray.flatten(scipy.ndimage.imread("im_01.jpg", flatten=True)))
+#input_image = np.vectorize(lambda x: 255 - x)(np.ndarray.flatten(scipy.ndimage.imread("im_01.jpg", flatten=True)))
 
 def print_input(input):
     for it1, i in enumerate(input):
