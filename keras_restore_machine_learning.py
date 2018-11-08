@@ -5,7 +5,7 @@ import numpy as np
 import scipy
 import os
 import sys
-import cv2
+#import cv2
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -63,8 +63,13 @@ def load_model(model_name, model_weights):
     return loaded_model
 
 def predict(loaded_model, input):
-    predict = loaded_model.predict(input, verbose=0)
-    print(np.argmax(predict))
+    predicts = loaded_model.predict(input, verbose=0)
+    for predict in predicts:
+        for item in predict:
+            print(item, end=' ')
+        print('')
+ #   print(predicts)
+    #print(np.argmax(predict))
 
 def get_input():
     input_array = sys.stdin.readlines()
