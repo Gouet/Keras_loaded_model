@@ -1,100 +1,156 @@
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.models import model_from_json
-import numpy as np
-import scipy
 import os
 import sys
-#import cv2
+
+import socket
+import io
+
+import numpy as np
+from keras.models import model_from_json
+from ast import literal_eval as make_tuple
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-#input_image = np.vectorize(lambda x: 255 - x)(np.ndarray.flatten(scipy.ndimage.imread("im_01.jpg", flatten=True)))
 
-def print_input(input):
-    for it1, i in enumerate(input):
-        #print('[', end='')
-        for it2, u in enumerate(i):
-            if it2 > 0:
-                print(',', end='')
-            #print('[', end='')
-            for it, y in enumerate(u):
-                if (it + 1) < len(u):
-                    print(y, end=',')
-                else:
-                    print(y, end='\n')
-    pass
+class DNAIService:
+    def __init__(self, port):
+        self.model = None
+        self.is_running = False
+        self.commands = {
+            "LOAD_MODEL": self.load_model,
+            "LOAD_WEIGHTS": self.load_weights,
+            "PREDICT": self.predict,
+            "QUIT": self.quit
+        }
+        self.read_lines = []
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.connect(('127.0.0.1'.encode(), port))
+        self.enable_log = False
+        print(self.commands.keys())
 
-#line = sys.stdin.readlines()
-#for data in line:
-#    test = data.split(',')
-#    i = 0
-#    while i < len(test):
-#        a = 0
-#        while a < 27:
-#            print(float(test[i + a]) / 255, end=',')
-#            a += 1
-#        print(float(test[i + a]) / 255)
-#        i += a
+    @staticmethod
+    def LogMessage(msg):
+        if self.enable_log:
+            with open('log_file.info', 'a') as lfile:
+                print(msg, file=lfile)
 
-#img = cv2.imread('test5.png', 0)
-#if img.shape != [28,28]:
-#    img2 = cv2.resize(img,(28,28))
-#    img = img2.reshape(28,28,-1);
-#else:
-#    img = img.reshape(28,28,-1);
-#revert the image,and normalize it to 0-1 range
-#img = 1.0 - img/255.0
-#img = img.transpose(2, 0, 1)
-#print(img)
-#print_input(img)
+    def send_data(self, data):
+        print(data)
+        self.server.send(data.encode())
 
-def load_model(model_name, model_weights):
-    # load json and create model
-    json_file = open(model_name, 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    loaded_model = model_from_json(loaded_model_json)
-    # load weights into new model
-    loaded_model.load_weights(model_weights)
+    def send_error(self, msg):
+        self.send_data('ERROR: %s\n' % str(msg))
 
-    # evaluate loaded model on test data
-    loaded_model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-    return loaded_model
+    def read_data(self):
+        size = len(self.read_lines)
 
-def predict(loaded_model, input):
-    predicts = loaded_model.predict(input, verbose=0)
-    for predict in predicts:
-        for item in predict:
-            print(item, end=' ')
-        print('')
- #   print(predicts)
-    #print(np.argmax(predict))
+        if size > 1:
+            return self.read_lines.pop(0)
 
-def get_input():
-    input_array = sys.stdin.readlines()
-    values = [[]]
-    idx = 0
+        data = self.server.recv(4096).decode('utf-8').replace('\r', '')
+        lines = data.split('\n')
 
-    for line in input_array:
-        data = line.split(',')
-        if line == '\n':
-            continue
-        values[0].append([])
-        for nbr in data:
-            values[0][idx].append(float(nbr))
-        idx += 1
-    return np.array(values)
+        if len(lines) == 0 and len(self.read_lines) == 0:
+            return ''
 
-def main(argv):
-    model_name = argv[1] #model.json
-    model_weights = argv[2] #model.h5
-    loaded_model = load_model(model_name, model_weights)
-    input_data = get_input()
-    predict(loaded_model, input_data)
+        if len(self.read_lines) > 0:
+            self.read_lines[0] += lines[0]
+            self.read_lines += lines[1:]
+        else:
+            self.read_lines += lines
+
+        return self.read_lines.pop(0)
+
+    def load_model(self):
+        filename = self.read_data()
+        with open(filename, 'r') as json_file:
+            loaded_model_json = json_file.read()
+        self.model = model_from_json(loaded_model_json)
+        DNAIService.LogMessage('Model loaded: ' + filename)
+
+    def load_weights(self):
+        filename = self.read_data()
+        self.model.load_weights(filename)
+        DNAIService.LogMessage('Weights loaded: ' + filename)
+
+    def get_inputs(self):
+        DNAIService.LogMessage('====Get input====')
+        DNAIService.LogMessage('Read row')
+        row_count = int(self.read_data())
+        DNAIService.LogMessage('- row ' + str(row_count))
+        DNAIService.LogMessage('Read col')
+        col_count = int(self.read_data())
+        DNAIService.LogMessage('- col ' + str(col_count))
+        DNAIService.LogMessage('Read shape')
+        shape = make_tuple(self.read_data())
+        DNAIService.LogMessage('- shape ' + str(shape))
+        DNAIService.LogMessage('Read inputs')
+        inputs = []
+
+        for i in range(0, row_count):
+            DNAIService.LogMessage('- Line %d' % i)
+            row = self.read_data()
+            DNAIService.LogMessage('  - Row: %s' % row)
+            splitRow = row.split(',')
+            real_row = [float(value) for value in splitRow]
+            if len(real_row) != col_count:
+                raise SyntaxError('No enough data in row %d' % i)
+            inputs.append(real_row)
+
+        return np.array(inputs).reshape(shape)
+
+    def predict(self):
+        DNAIService.LogMessage('Starting prediction')
+        inputs = self.get_inputs()
+        DNAIService.LogMessage('Inputs get')
+        DNAIService.LogMessage('Start prediction')
+        predicts = self.model.predict(np.array([inputs]), verbose=0)
+        DNAIService.LogMessage('Prediction finished: ' + str(predicts))
+        response = str(len(predicts)) + '\n'
+        for prediction in predicts:
+            plen = len(prediction)
+            for index, item in enumerate(prediction):
+                response += str(item) + (',' if index + 1 < plen else '\n')
+        self.send_data(response)
+
+    def quit(self):
+        self.is_running = False
+
+    def run(self):
+        print('Server is running', file=sys.stderr)
+        self.is_running = True
+        while self.is_running:
+            self.LogMessage('Getting command')
+            command = self.read_data()
+            if len(command) == 0:
+                print('Disconnected')
+                self.LogMessage('Disconnected')
+                self.is_running = False
+                break
+            self.LogMessage('Command Get: ' + command)
+            if command in self.commands.keys():
+                try:
+                    self.commands[command]()
+                except Exception as err:
+                    self.send_error('Command %s: %s' % (command, str(err)))
+                    print('Failed to execute %s:' % command, err, file=sys.stderr)
+                    DNAIService.LogMessage('Error detected: ' + str(err))
+            else:
+                print('No such command:', command, file=sys.stderr)
+
+
+def main(av):
+    if len(av) != 3:
+        print('Invalid arguments')
+        exit(1)
+
+    port = int(av[2])
+    service = DNAIService(port)
+    try:
+        service.run()
+    except Exception as err:
+        print('Program error:', err, file=sys.stderr)
+        service.send_error('Program: %s' % str(err))
+
 
 if __name__ == '__main__':
-    if (len(sys.argv) < 3):
-        print('missing model or wights', file=sys.stderr)
-        exit(1)
     main(sys.argv)
