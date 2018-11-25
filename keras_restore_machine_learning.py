@@ -27,11 +27,10 @@ class DNAIService:
         self.enable_log = False
         print(self.commands.keys())
 
-    @staticmethod
-    def LogMessage(msg):
-        if self.enable_log:
-            with open('log_file.info', 'a') as lfile:
-                print(msg, file=lfile)
+    def LogMessage(self, msg):
+    	if self.enable_log:
+	        with open('log_file.info', 'a') as lfile:
+	            print(msg, file=lfile)
 
     def send_data(self, data):
         print(data)
@@ -65,31 +64,31 @@ class DNAIService:
         with open(filename, 'r') as json_file:
             loaded_model_json = json_file.read()
         self.model = model_from_json(loaded_model_json)
-        DNAIService.LogMessage('Model loaded: ' + filename)
+        self.LogMessage('Model loaded: ' + filename)
 
     def load_weights(self):
         filename = self.read_data()
         self.model.load_weights(filename)
-        DNAIService.LogMessage('Weights loaded: ' + filename)
+        self.LogMessage('Weights loaded: ' + filename)
 
     def get_inputs(self):
-        DNAIService.LogMessage('====Get input====')
-        DNAIService.LogMessage('Read row')
+        self.LogMessage('====Get input====')
+        self.LogMessage('Read row')
         row_count = int(self.read_data())
-        DNAIService.LogMessage('- row ' + str(row_count))
-        DNAIService.LogMessage('Read col')
+        self.LogMessage('- row ' + str(row_count))
+        self.LogMessage('Read col')
         col_count = int(self.read_data())
-        DNAIService.LogMessage('- col ' + str(col_count))
-        DNAIService.LogMessage('Read shape')
+        self.LogMessage('- col ' + str(col_count))
+        self.LogMessage('Read shape')
         shape = make_tuple(self.read_data())
-        DNAIService.LogMessage('- shape ' + str(shape))
-        DNAIService.LogMessage('Read inputs')
+        self.LogMessage('- shape ' + str(shape))
+        self.LogMessage('Read inputs')
         inputs = []
 
         for i in range(0, row_count):
-            DNAIService.LogMessage('- Line %d' % i)
+            self.LogMessage('- Line %d' % i)
             row = self.read_data()
-            DNAIService.LogMessage('  - Row: %s' % row)
+            self.LogMessage('  - Row: %s' % row)
             splitRow = row.split(',')
             real_row = [float(value) for value in splitRow]
             if len(real_row) != col_count:
@@ -99,12 +98,12 @@ class DNAIService:
         return np.array(inputs).reshape(shape)
 
     def predict(self):
-        DNAIService.LogMessage('Starting prediction')
+        self.LogMessage('Starting prediction')
         inputs = self.get_inputs()
-        DNAIService.LogMessage('Inputs get')
-        DNAIService.LogMessage('Start prediction')
+        self.LogMessage('Inputs get')
+        self.LogMessage('Start prediction')
         predicts = self.model.predict(np.array([inputs]), verbose=0)
-        DNAIService.LogMessage('Prediction finished: ' + str(predicts))
+        self.LogMessage('Prediction finished: ' + str(predicts))
         response = str(len(predicts)) + '\n'
         for prediction in predicts:
             plen = len(prediction)
@@ -133,7 +132,7 @@ class DNAIService:
                 except Exception as err:
                     self.send_error('Command %s: %s' % (command, str(err)))
                     print('Failed to execute %s:' % command, err, file=sys.stderr)
-                    DNAIService.LogMessage('Error detected: ' + str(err))
+                    self.LogMessage('Error detected: ' + str(err))
             else:
                 print('No such command:', command, file=sys.stderr)
 
